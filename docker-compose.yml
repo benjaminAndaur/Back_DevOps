@@ -1,0 +1,55 @@
+services:
+  backend:
+    image: ${DOCKERHUB_USERNAME:-beandaur}/devops_back:latest
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: backend
+    ports:
+      - "3000:3000"
+    environment:
+      - PORT=3000
+      - DB_HOST=mysql
+      - DB_PORT=3306
+      - DB_USER=${DB_USER:-app_user}
+      - DB_PASSWORD=${DB_PASSWORD:-app_password}
+      - DB_NAME=${DB_NAME:-proyecto_db}
+    depends_on:
+      mysql:
+        condition: service_healthy
+    restart: unless-stopped
+    networks:
+      - backend-network
+
+  mysql:
+    image: mysql:8.0
+    container_name: mysql
+    environment:
+      - MYSQL_ROOT_PASSWORD=${MYSQL_ROOT_PASSWORD:-root_password}
+      - MYSQL_DATABASE=${DB_NAME:-proyecto_db}
+      - MYSQL_USER=${DB_USER:-app_user}
+      - MYSQL_PASSWORD=${DB_PASSWORD:-app_password}
+    volumes:
+      # Named volume: los datos persisten aunque se detenga el contenedor
+      - mysql-data:/var/lib/mysql
+      # Script de inicialización ejecutado al primer arranque
+      - ./init-db:/docker-entrypoint-initdb.d:ro
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-u", "root", "-p${MYSQL_ROOT_PASSWORD:-root_password}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+    restart: unless-stopped
+    networks:
+      - backend-network
+
+# Named volume: Docker gestiona el almacenamiento, sobrevive a docker-compose down
+# Preferido sobre bind mount en producción porque no depende de rutas del host
+volumes:
+  mysql-data:
+    driver: local
+
+networks:
+  backend-network:
+    driver: bridge
